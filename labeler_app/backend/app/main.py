@@ -24,3 +24,16 @@ app.include_router(api_router, prefix=settings.api_prefix)
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+@app.get("/health/model")
+def health_model() -> dict[str, str | bool]:
+    """Check if SAM3 model is loaded and ready."""
+    from app.services.sam3_model_manager import get_sam3_model_manager
+
+    manager = get_sam3_model_manager()
+    return {
+        "status": "ready" if manager.is_ready() else "loading",
+        "device": manager.get_device(),
+        "loaded": manager.is_ready(),
+    }
+

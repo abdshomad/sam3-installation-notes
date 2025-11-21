@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Annotation, ImageAsset, LabelClass } from '../types'
 import { buildImageUrl } from '../utils/images'
+import { hasMask, getMaskData } from '../utils/maskDecoder'
+import { MaskOverlay } from './MaskOverlay'
 
 type Props = {
   image: ImageAsset | undefined
@@ -8,6 +10,9 @@ type Props = {
   selectedClass: LabelClass | undefined
   classes: LabelClass[] | undefined
   onCreate: (geometry: Record<string, unknown>) => Promise<void>
+  onMetricsUpdate?: (metrics: ImageMetrics) => void
+  cropMode?: boolean
+  onCropCancel?: () => void
 }
 
 interface ImageMetrics {
@@ -17,7 +22,16 @@ interface ImageMetrics {
   displayHeight: number
 }
 
-export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, onCreate }: Props) => {
+export const AnnotationCanvas = ({
+  image,
+  annotations,
+  selectedClass,
+  classes,
+  onCreate,
+  onMetricsUpdate,
+  cropMode = false,
+  onCropCancel,
+}: Props) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const [draftBox, setDraftBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
@@ -39,16 +53,18 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = event.currentTarget
     const rect = event.currentTarget.getBoundingClientRect()
-    setMetrics({
+    const newMetrics = {
       naturalWidth,
       naturalHeight,
       displayWidth: rect.width,
       displayHeight: rect.height,
-    })
+    }
+    setMetrics(newMetrics)
+    onMetricsUpdate?.(newMetrics)
   }
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!selectedClass || !containerRef.current) return
+    if (cropMode || !selectedClass || !containerRef.current) return
     const bounds = containerRef.current.getBoundingClientRect()
     const x = event.clientX - bounds.left
     const y = event.clientY - bounds.top
@@ -57,7 +73,7 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!startRef.current || !containerRef.current) return
+    if (cropMode || !startRef.current || !containerRef.current) return
     const bounds = containerRef.current.getBoundingClientRect()
     const x = event.clientX - bounds.left
     const y = event.clientY - bounds.top
@@ -70,7 +86,7 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
   }
 
   const handlePointerUp = async () => {
-    if (!startRef.current || !draftBox || !selectedClass) return
+    if (cropMode || !startRef.current || !draftBox || !selectedClass) return
     startRef.current = null
     setDraftBox(null)
 
@@ -93,6 +109,9 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
     return map
   }, [classes])
 
+  const scaleX = metrics.displayWidth / metrics.naturalWidth
+  const scaleY = metrics.displayHeight / metrics.naturalHeight
+
   const annotationRects = useMemo(() => {
     if (!annotations || !metrics.displayWidth) return []
     return annotations
@@ -113,6 +132,23 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
       })
       .filter(Boolean) as Array<{ id: number; style: Record<string, number>; labelClassId: number }>
   }, [annotations, metrics])
+
+  const annotationMasks = useMemo(() => {
+    if (!annotations || !metrics.displayWidth || !image) return []
+    return annotations
+      .map((annotation) => {
+        if (!hasMask(annotation)) return null
+        const maskRLE = getMaskData(annotation)
+        if (!maskRLE) return null
+
+        return {
+          id: annotation.id,
+          maskRLE,
+          color: colorMap.get(annotation.label_class_id) || '#f97316',
+        }
+      })
+      .filter(Boolean) as Array<{ id: number; maskRLE: string; color: string }>
+  }, [annotations, metrics, colorMap, image])
 
   if (!image) {
     return (
@@ -137,6 +173,19 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
         onLoad={handleImageLoad}
       />
       <div className="pointer-events-none absolute inset-0">
+        {/* Render masks as canvas overlays */}
+        {annotationMasks.map((mask) => (
+          <MaskOverlay
+            key={mask.id}
+            maskRLE={getMaskData(annotations?.find((a) => a.id === mask.id)!) || ''}
+            width={metrics.naturalWidth}
+            height={metrics.naturalHeight}
+            displayWidth={metrics.displayWidth}
+            displayHeight={metrics.displayHeight}
+            color={mask.color}
+          />
+        ))}
+        {/* Fallback to bounding boxes if no masks */}
         {annotationRects.map((rect) => (
           <div
             key={rect.id}
@@ -155,7 +204,7 @@ export const AnnotationCanvas = ({ image, annotations, selectedClass, classes, o
           />
         )}
       </div>
-      {!selectedClass && (
+      {!cropMode && !selectedClass && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 w-max -translate-x-1/2 rounded-full bg-slate-900/80 px-4 py-1 text-xs text-slate-300">
           Select a label class to add annotations
         </div>

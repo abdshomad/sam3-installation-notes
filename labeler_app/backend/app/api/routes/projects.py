@@ -16,7 +16,12 @@ def list_projects(session: Session = Depends(get_db)) -> list[Project]:
 @router.post("/", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 def create_project(payload: ProjectBase, session: Session = Depends(get_db)) -> Project:
     slug = unique_slug(session, Project, payload.name, field_name="slug")
-    project = Project(name=payload.name, description=payload.description, slug=slug)
+    project = Project(
+        name=payload.name,
+        description=payload.description,
+        slug=slug,
+        confidence_threshold=payload.confidence_threshold,
+    )
     session.add(project)
     session.commit()
     session.refresh(project)

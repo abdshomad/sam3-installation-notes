@@ -3,6 +3,7 @@ export interface Project {
   name: string
   description?: string | null
   slug: string
+  confidence_threshold: number
   created_at: string
   updated_at: string
 }
@@ -47,7 +48,25 @@ export interface Annotation {
   geometry: Record<string, any>
   attributes?: Record<string, any> | null
   author?: string | null
+  presence_score?: number | null
+  concept_text?: string | null
+  exemplar_crop?: Record<string, any> | null
+  is_ai_generated?: boolean
   created_at: string
   updated_at: string
+}
+
+export interface ConceptPromptResponse {
+  image_id: number
+  concept_text: string | null
+  presence_token: number | null
+  annotations: Array<{
+    id: number | null
+    box: number[]
+    mask: string
+    score: number
+    presence_score: number
+  }>
+  num_instances: number
 }
 

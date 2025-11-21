@@ -15,6 +15,7 @@ class TimestampMixin(SQLModel):
 class ProjectBase(SQLModel):
     name: str = Field(max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class Project(ProjectBase, TimestampMixin, table=True):
@@ -26,6 +27,7 @@ class Project(ProjectBase, TimestampMixin, table=True):
 class ProjectRead(ProjectBase):
     id: int
     slug: str
+    confidence_threshold: float
     created_at: datetime
     updated_at: datetime
 
@@ -99,6 +101,10 @@ class AnnotationBase(SQLModel):
     annotation_type: str = Field(default="bbox")
     geometry: Dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     attributes: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+    presence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    concept_text: Optional[str] = Field(default=None, max_length=500)
+    exemplar_crop: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+    is_ai_generated: bool = Field(default=False)
 
 
 class Annotation(AnnotationBase, TimestampMixin, table=True):
@@ -114,6 +120,10 @@ class AnnotationRead(AnnotationBase):
     image_id: int
     label_class_id: int
     author: Optional[str]
+    presence_score: Optional[float]
+    concept_text: Optional[str]
+    exemplar_crop: Optional[Dict[str, Any]]
+    is_ai_generated: bool
     created_at: datetime
     updated_at: datetime
 
@@ -122,6 +132,10 @@ class AnnotationCreate(AnnotationBase):
     image_id: int
     label_class_id: int
     author: Optional[str] = None
+    presence_score: Optional[float] = None
+    concept_text: Optional[str] = None
+    exemplar_crop: Optional[Dict[str, Any]] = None
+    is_ai_generated: bool = False
 
 
 class TaskBase(SQLModel):
@@ -150,4 +164,101 @@ class TaskUpdate(SQLModel):
     status: Optional[str] = None
     assignee: Optional[str] = None
     qa_status: Optional[str] = None
+
+
+class VideoAssetBase(SQLModel):
+    original_filename: str
+    width: Optional[int] = None
+    height: Optional[int] = None
+    duration: Optional[float] = None
+    fps: Optional[float] = None
+    frame_count: Optional[int] = None
+
+
+class VideoAsset(VideoAssetBase, TimestampMixin, table=True):
+    __tablename__ = "video_assets"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dataset_id: int = Field(foreign_key="datasets.id", index=True)
+    file_path: str
+    hls_path: Optional[str] = None
+    status: str = Field(default="processing")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+
+
+class VideoAssetRead(VideoAssetBase):
+    id: int
+    dataset_id: int
+    file_path: str
+    hls_path: Optional[str]
+    status: str
+    metadata: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+
+class MaskletBase(SQLModel):
+    obj_id: int
+    video_id: int
+    frame_start: int
+    frame_end: int
+
+
+class Masklet(MaskletBase, TimestampMixin, table=True):
+    __tablename__ = "masklets"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    memory_bank_snapshot: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+    annotations: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+
+
+class MaskletRead(MaskletBase):
+    id: int
+    memory_bank_snapshot: Optional[Dict[str, Any]]
+    annotations: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserBase(SQLModel):
+    email: str = Field(unique=True, index=True, max_length=255)
+    name: str = Field(max_length=200)
+    is_active: bool = Field(default=True)
+
+
+class User(UserBase, TimestampMixin, table=True):
+    __tablename__ = "users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    hashed_password: Optional[str] = Field(default=None, max_length=255)
+    role: str = Field(default="labeler", max_length=50)  # admin, reviewer, labeler
+
+
+class UserRead(UserBase):
+    id: int
+    role: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectMemberBase(SQLModel):
+    role: str = Field(default="labeler", max_length=50)  # admin, reviewer, labeler
+
+
+class ProjectMember(ProjectMemberBase, TimestampMixin, table=True):
+    __tablename__ = "project_members"
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_user"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="projects.id", index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+
+class ProjectMemberRead(ProjectMemberBase):
+    id: int
+    project_id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
 

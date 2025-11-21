@@ -10,7 +10,13 @@ import {
   fetchLabelClasses,
 } from '../api/projects'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
+import { useState } from 'react'
 import { AnnotationCanvas } from '../components/AnnotationCanvas'
+import { ConceptCommandBar } from '../components/ConceptCommandBar'
+import { ConfidenceBadge } from '../components/ConfidenceIndicator'
+import { CropTool } from '../components/CropTool'
+import { BatchLabelingDialog } from '../components/BatchLabelingDialog'
+import { promptImageWithExemplar } from '../api/concepts'
 
 export const LabelerPage = () => {
   const { datasetId } = useParams<{ datasetId: string }>()
@@ -32,6 +38,12 @@ export const LabelerPage = () => {
   })
 
   const projectId = datasetQuery.data?.project_id
+
+  const projectQuery = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => fetchProject(projectId as number),
+    enabled: Boolean(projectId),
+  })
 
   const classesQuery = useQuery({
     queryKey: ['labelClasses', projectId],
@@ -58,6 +70,14 @@ export const LabelerPage = () => {
   })
 
   const { selectedClassId, setSelectedClassId } = useWorkspaceStore()
+  const [cropMode, setCropMode] = useState(false)
+  const [imageMetrics, setImageMetrics] = useState<{
+    naturalWidth: number
+    naturalHeight: number
+    displayWidth: number
+    displayHeight: number
+  } | null>(null)
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false)
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.length) {
@@ -84,6 +104,33 @@ export const LabelerPage = () => {
   const handleCreateAnnotation = async (geometry: Record<string, unknown>) => {
     if (!selectedClassId || !activeImageId) return
     await createAnnotationMutation.mutateAsync(geometry)
+  }
+
+  const handleCropComplete = async (crop: { x: number; y: number; w: number; h: number }) => {
+    if (!projectId || !activeImageId) return
+
+    setCropMode(false)
+    try {
+      await promptImageWithExemplar(projectId, activeImageId, {
+        crop,
+        type: 'positive',
+        create_annotations: true,
+      })
+      queryClient.invalidateQueries({ queryKey: ['annotations', activeImageId] })
+      queryClient.invalidateQueries({ queryKey: ['labelClasses', projectId] })
+    } catch (error) {
+      console.error('Exemplar prompt error:', error)
+      // TODO: Show error toast
+    }
+  }
+
+  const handleImageMetricsUpdate = (metrics: {
+    naturalWidth: number
+    naturalHeight: number
+    displayWidth: number
+    displayHeight: number
+  }) => {
+    setImageMetrics(metrics)
   }
 
   const goToImage = (imageId: number) => {
@@ -135,12 +182,51 @@ export const LabelerPage = () => {
       </aside>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between text-sm text-slate-400">
-          <div>
-            <p>{datasetQuery.data?.name}</p>
-            <p className="text-xs text-slate-500">Selected class: {selectedClass?.name || 'None'}</p>
-          </div>
-          <div className="space-x-2">
+        <div className="space-y-3">
+          {projectId && (
+            <ConceptCommandBar
+              projectId={projectId}
+              imageId={activeImageId}
+              confidenceThreshold={projectQuery.data?.confidence_threshold ?? 0.7}
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['annotations', activeImageId] })
+                queryClient.invalidateQueries({ queryKey: ['labelClasses', projectId] })
+              }}
+              onError={(error) => {
+                console.error('Concept prompt error:', error)
+                // TODO: Show error toast
+              }}
+            />
+          )}
+          <div className="flex items-center justify-between text-sm text-slate-400">
+            <div>
+              <p>{datasetQuery.data?.name}</p>
+              <p className="text-xs text-slate-500">Selected class: {selectedClass?.name || 'None'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchDialogOpen(true)}
+                className="rounded-lg border border-sky-600 bg-sky-600/20 px-3 py-1 text-xs font-medium text-sky-400 hover:bg-sky-600/30"
+                title="Batch auto-label entire dataset"
+              >
+                Batch Label
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCropMode(!cropMode)
+                }}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
+                  cropMode
+                    ? 'border-emerald-600 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                    : 'border-slate-600 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                }`}
+                title="Crop exemplar for visual search"
+              >
+                {cropMode ? 'Cancel Crop' : 'Crop Exemplar'}
+              </button>
+              <div className="space-x-2">
             <button
               className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-white disabled:opacity-30"
               disabled={!imagesQuery.data || !activeImageId}
@@ -168,15 +254,32 @@ export const LabelerPage = () => {
               Next
             </button>
           </div>
+          </div>
         </div>
 
-        <AnnotationCanvas
-          image={activeImage}
-          annotations={annotationsQuery.data}
-          selectedClass={selectedClass}
-          classes={classesQuery.data}
-          onCreate={handleCreateAnnotation}
-        />
+        <div className="relative">
+          <AnnotationCanvas
+            image={activeImage}
+            annotations={annotationsQuery.data}
+            selectedClass={cropMode ? undefined : selectedClass}
+            classes={classesQuery.data}
+            onCreate={handleCreateAnnotation}
+            onMetricsUpdate={handleImageMetricsUpdate}
+            cropMode={cropMode}
+            onCropCancel={() => setCropMode(false)}
+          />
+          {cropMode && imageMetrics && (
+            <CropTool
+              enabled={cropMode}
+              imageWidth={imageMetrics.naturalWidth}
+              imageHeight={imageMetrics.naturalHeight}
+              displayWidth={imageMetrics.displayWidth}
+              displayHeight={imageMetrics.displayHeight}
+              onCrop={handleCropComplete}
+              onCancel={() => setCropMode(false)}
+            />
+          )}
+        </div>
       </div>
 
       <aside className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -185,16 +288,54 @@ export const LabelerPage = () => {
           {annotationsQuery.data?.map((annotation) => {
             const label = classesQuery.data?.find((cls) => cls.id === annotation.label_class_id)
             const bbox = annotation.geometry?.bbox
+            const conceptText = annotation.concept_text
+            const isAIGenerated = annotation.is_ai_generated
             return (
-              <div key={annotation.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-                <p className="font-medium">{label?.name || 'Class'}</p>
-                {bbox && <p className="text-xs text-slate-500">bbox: {bbox.map((v: number) => Math.round(v)).join(', ')}</p>}
+              <div
+                key={annotation.id}
+                className={`rounded-lg border p-3 ${
+                  annotation.presence_score !== null && annotation.presence_score < 0.7
+                    ? 'border-yellow-500/50 bg-yellow-900/20'
+                    : 'border-slate-800 bg-slate-900/60'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{label?.name || 'Class'}</p>
+                      {isAIGenerated && (
+                        <span className="text-xs text-sky-400" title="AI Generated">
+                          AI
+                        </span>
+                      )}
+                    </div>
+                    {conceptText && (
+                      <p className="mt-1 text-xs text-slate-400 italic">&quot;{conceptText}&quot;</p>
+                    )}
+                    {bbox && (
+                      <p className="mt-1 text-xs text-slate-500">bbox: {bbox.map((v: number) => Math.round(v)).join(', ')}</p>
+                    )}
+                  </div>
+                  {annotation.presence_score !== null && (
+                    <ConfidenceBadge score={annotation.presence_score} />
+                  )}
+                </div>
               </div>
             )
           })}
           {!annotationsQuery.data?.length && <p className="text-xs text-slate-500">No annotations yet.</p>}
         </div>
       </aside>
+
+      {projectId && datasetQuery.data && (
+        <BatchLabelingDialog
+          projectId={projectId}
+          datasetId={numericId}
+          isOpen={batchDialogOpen}
+          onClose={() => setBatchDialogOpen(false)}
+          defaultThreshold={projectQuery.data?.confidence_threshold ?? 0.7}
+        />
+      )}
     </div>
   )
 }
