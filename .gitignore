@@ -151,3 +151,6 @@ Thumbs.db
 # BPE vocabulary files
 *.bpe
 *.vocab
+labeler_app/docs/prd/*
+labeler_app/screenshots/*
+labeler_app/storage/*

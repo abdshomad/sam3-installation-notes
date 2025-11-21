@@ -1,0 +1,2 @@
+"""Labeler application namespace."""
+

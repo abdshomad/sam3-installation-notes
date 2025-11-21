@@ -1,0 +1,2 @@
+"""Labeler backend application package."""
+
