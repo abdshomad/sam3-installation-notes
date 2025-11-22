@@ -29,7 +29,7 @@ class ProjectMemberUpdate(BaseModel):
 def add_project_member(
     project_id: int,
     payload: ProjectMemberCreate,
-    member: ProjectMember = Depends(require_project_member(project_id, "admin")),
+    member: ProjectMember = Depends(require_project_member("admin")),
     session: Session = Depends(get_db),
 ) -> ProjectMember:
     """
@@ -79,7 +79,7 @@ def add_project_member(
 @router.get("/", response_model=list[ProjectMemberRead])
 def list_project_members(
     project_id: int,
-    member: ProjectMember = Depends(require_project_member(project_id, "labeler")),
+    member: ProjectMember = Depends(require_project_member("labeler")),
     session: Session = Depends(get_db),
 ) -> list[ProjectMember]:
     """List all members of a project."""
@@ -94,7 +94,7 @@ def list_project_members(
 def get_project_member(
     project_id: int,
     member_id: int,
-    member: ProjectMember = Depends(require_project_member(project_id, "labeler")),
+    member: ProjectMember = Depends(require_project_member("labeler")),
     session: Session = Depends(get_db),
 ) -> ProjectMember:
     """Get project member by ID."""
@@ -111,7 +111,7 @@ def update_project_member(
     project_id: int,
     member_id: int,
     payload: ProjectMemberUpdate,
-    member: ProjectMember = Depends(require_project_member(project_id, "admin")),
+    member: ProjectMember = Depends(require_project_member("admin")),
     session: Session = Depends(get_db),
 ) -> ProjectMember:
     """Update project member role (admin only)."""
@@ -134,7 +134,7 @@ def update_project_member(
 def remove_project_member(
     project_id: int,
     member_id: int,
-    member: ProjectMember = Depends(require_project_member(project_id, "admin")),
+    member: ProjectMember = Depends(require_project_member("admin")),
     session: Session = Depends(get_db),
 ) -> None:
     """Remove a user from a project (admin only)."""

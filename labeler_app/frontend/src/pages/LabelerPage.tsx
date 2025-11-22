@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import classNames from 'classnames'
@@ -8,9 +8,9 @@ import {
   fetchDataset,
   fetchImages,
   fetchLabelClasses,
+  fetchProject,
 } from '../api/projects'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
-import { useState } from 'react'
 import { AnnotationCanvas } from '../components/AnnotationCanvas'
 import { ConceptCommandBar } from '../components/ConceptCommandBar'
 import { ConfidenceBadge } from '../components/ConfidenceIndicator'
@@ -217,43 +217,43 @@ export const LabelerPage = () => {
                 onClick={() => {
                   setCropMode(!cropMode)
                 }}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
-                  cropMode
-                    ? 'border-emerald-600 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
-                    : 'border-slate-600 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
-                }`}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${cropMode
+                  ? 'border-emerald-600 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                  : 'border-slate-600 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                  }`}
                 title="Crop exemplar for visual search"
               >
                 {cropMode ? 'Cancel Crop' : 'Crop Exemplar'}
               </button>
               <div className="space-x-2">
-            <button
-              className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-white disabled:opacity-30"
-              disabled={!imagesQuery.data || !activeImageId}
-              onClick={() => {
-                if (!imagesQuery.data || !activeImageId) return
-                const currentIndex = imagesQuery.data.findIndex((img) => img.id === activeImageId)
-                if (currentIndex > 0) {
-                  goToImage(imagesQuery.data[currentIndex - 1].id)
-                }
-              }}
-            >
-              Previous
-            </button>
-            <button
-              className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-white disabled:opacity-30"
-              disabled={!imagesQuery.data || !activeImageId}
-              onClick={() => {
-                if (!imagesQuery.data || !activeImageId) return
-                const currentIndex = imagesQuery.data.findIndex((img) => img.id === activeImageId)
-                if (currentIndex < imagesQuery.data.length - 1) {
-                  goToImage(imagesQuery.data[currentIndex + 1].id)
-                }
-              }}
-            >
-              Next
-            </button>
-          </div>
+                <button
+                  className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-white disabled:opacity-30"
+                  disabled={!imagesQuery.data || !activeImageId}
+                  onClick={() => {
+                    if (!imagesQuery.data || !activeImageId) return
+                    const currentIndex = imagesQuery.data.findIndex((img) => img.id === activeImageId)
+                    if (currentIndex > 0) {
+                      goToImage(imagesQuery.data[currentIndex - 1].id)
+                    }
+                  }}
+                >
+                  Previous
+                </button>
+                <button
+                  className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-white disabled:opacity-30"
+                  disabled={!imagesQuery.data || !activeImageId}
+                  onClick={() => {
+                    if (!imagesQuery.data || !activeImageId) return
+                    const currentIndex = imagesQuery.data.findIndex((img) => img.id === activeImageId)
+                    if (currentIndex < imagesQuery.data.length - 1) {
+                      goToImage(imagesQuery.data[currentIndex + 1].id)
+                    }
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -293,11 +293,10 @@ export const LabelerPage = () => {
             return (
               <div
                 key={annotation.id}
-                className={`rounded-lg border p-3 ${
-                  annotation.presence_score !== null && annotation.presence_score < 0.7
-                    ? 'border-yellow-500/50 bg-yellow-900/20'
-                    : 'border-slate-800 bg-slate-900/60'
-                }`}
+                className={`rounded-lg border p-3 ${annotation.presence_score != null && annotation.presence_score < 0.7
+                  ? 'border-yellow-500/50 bg-yellow-900/20'
+                  : 'border-slate-800 bg-slate-900/60'
+                  }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
@@ -317,7 +316,7 @@ export const LabelerPage = () => {
                     )}
                   </div>
                   {annotation.presence_score !== null && (
-                    <ConfidenceBadge score={annotation.presence_score} />
+                    <ConfidenceBadge score={annotation.presence_score ?? null} />
                   )}
                 </div>
               </div>
@@ -325,18 +324,16 @@ export const LabelerPage = () => {
           })}
           {!annotationsQuery.data?.length && <p className="text-xs text-slate-500">No annotations yet.</p>}
         </div>
+        {projectId && datasetQuery.data && (
+          <BatchLabelingDialog
+            projectId={projectId}
+            datasetId={numericId}
+            isOpen={batchDialogOpen}
+            onClose={() => setBatchDialogOpen(false)}
+            defaultThreshold={projectQuery.data?.confidence_threshold ?? 0.7}
+          />
+        )}
       </aside>
-
-      {projectId && datasetQuery.data && (
-        <BatchLabelingDialog
-          projectId={projectId}
-          datasetId={numericId}
-          isOpen={batchDialogOpen}
-          onClose={() => setBatchDialogOpen(false)}
-          defaultThreshold={projectQuery.data?.confidence_threshold ?? 0.7}
-        />
-      )}
     </div>
   )
 }
-

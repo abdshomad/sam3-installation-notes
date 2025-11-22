@@ -135,7 +135,7 @@ def merge_consensus_annotations(
         annotation_type=base_ann.annotation_type,
         geometry=base_ann.geometry,
         attributes={
-            **base_ann.attributes or {},
+            **(base_ann.attributes or {}),
             "consensus_score": consensus_score,
             "merged_from": [ann.id for ann in annotations],
         },

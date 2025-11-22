@@ -57,7 +57,7 @@ def require_role(required_role: str):
     return role_checker
 
 
-def require_project_member(project_id: int, min_role: str = "labeler"):
+def require_project_member(min_role: str = "labeler"):
     """
     Dependency to require project membership with minimum role.
 
@@ -65,11 +65,12 @@ def require_project_member(project_id: int, min_role: str = "labeler"):
         @router.get("/projects/{project_id}/data")
         def get_data(
             project_id: int,
-            member: ProjectMember = Depends(require_project_member(project_id, "reviewer")),
+            member: ProjectMember = Depends(require_project_member("reviewer")),
         ):
             ...
     """
     def member_checker(
+        project_id: int,
         user: Optional[User] = Depends(get_current_user),
         session: Session = Depends(get_db),
     ) -> ProjectMember:

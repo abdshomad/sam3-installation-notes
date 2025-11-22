@@ -102,7 +102,7 @@ async def upload_video(
         duration=metadata.get("duration"),
         frame_count=metadata.get("frame_count"),
         status="processing",
-        metadata=metadata,
+        asset_metadata=metadata,
     )
     session.add(video_asset)
     session.commit()
@@ -145,8 +145,8 @@ def _process_video_background(
             if video_asset:
                 video_asset.status = "ready"
                 video_asset.hls_path = results.get("hls_path")
-                video_asset.metadata = {
-                    **video_asset.metadata or {},
+                video_asset.asset_metadata = {
+                    **(video_asset.asset_metadata or {}),
                     "keyframes": results.get("keyframes", []),
                 }
                 session.commit()
@@ -156,8 +156,8 @@ def _process_video_background(
             video_asset = session.get(VideoAsset, video_asset_id)
             if video_asset:
                 video_asset.status = "failed"
-                video_asset.metadata = {
-                    **video_asset.metadata or {},
+                video_asset.asset_metadata = {
+                    **(video_asset.asset_metadata or {}),
                     "error": str(e),
                 }
                 session.commit()

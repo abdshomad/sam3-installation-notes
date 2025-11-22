@@ -183,7 +183,7 @@ class VideoAsset(VideoAssetBase, TimestampMixin, table=True):
     file_path: str
     hls_path: Optional[str] = None
     status: str = Field(default="processing")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
+    asset_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
 
 
 class VideoAssetRead(VideoAssetBase):
@@ -192,7 +192,7 @@ class VideoAssetRead(VideoAssetBase):
     file_path: str
     hls_path: Optional[str]
     status: str
-    metadata: Optional[Dict[str, Any]]
+    asset_metadata: Optional[Dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
